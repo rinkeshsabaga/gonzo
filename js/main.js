@@ -70,7 +70,7 @@ document.getElementById('contact-form').addEventListener('submit', async (e) => 
         email: formData.email,
         phone: formData.phone,
         message: formData.message,
-        source: 'Gonzo Kitchen Landing Page'
+        source: 'Gonzo Asian Landing Page'
       })
     });
 
