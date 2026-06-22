@@ -34,6 +34,19 @@ tabs.forEach(tab => {
   });
 });
 
+// ── Validation helpers ──
+function normalizeIndianPhone(raw) {
+  const cleaned = raw.replace(/[\s\-()]/g, ''); // strip spaces, dashes, parens
+  const match = cleaned.match(/^(?:\+91|91|0)?([6-9]\d{9})$/);
+  return match ? '+91' + match[1] : null;
+}
+function isValidEmail(raw) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw.trim());
+}
+
+// ── Cloudflare Worker proxy (hides the real QuickReply webhook + injects ownerphone) ──
+const PROXY_URL = 'https://lucky-mud-bd81.rinkesh-singh.workers.dev/';
+
 // Contact form
 document.getElementById('contact-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -41,11 +54,40 @@ document.getElementById('contact-form').addEventListener('submit', async (e) => 
   const form = e.target;
   const btn = form.querySelector('button');
   const inputs = form.querySelectorAll('input, textarea');
+  const emailInput = inputs[1];
+  const phoneInput = inputs[2];
+
+  // Helper: flash an error on a field + the button, then reset
+  const flashError = (input, msg) => {
+    input.style.borderColor = '#cc0000';
+    input.focus();
+    const old = btn.textContent;
+    btn.textContent = msg;
+    btn.style.background = '#cc0000';
+    setTimeout(() => {
+      btn.textContent = old;
+      btn.style.background = '';
+      input.style.borderColor = '';
+    }, 2500);
+  };
+
+  // ── Email validation ──
+  if (!isValidEmail(emailInput.value)) {
+    flashError(emailInput, 'ENTER A VALID EMAIL');
+    return;
+  }
+
+  // ── Phone validation (+91) ──
+  const normalizedPhone = normalizeIndianPhone(phoneInput.value);
+  if (!normalizedPhone) {
+    flashError(phoneInput, 'ENTER A VALID +91 NUMBER');
+    return;
+  }
 
   const formData = {
     name: inputs[0].value,
-    email: inputs[1].value,
-    phone: inputs[2].value,
+    email: emailInput.value.trim(),
+    phone: normalizedPhone,   // sent as +919xxxxxxxxx
     message: inputs[3].value
   };
 
@@ -56,32 +98,25 @@ document.getElementById('contact-form').addEventListener('submit', async (e) => 
   btn.disabled = true;
 
   try {
-    // ── CRM API / WEBHOOK CALL ──
-    // Replace this placeholder URL with your actual CRM API endpoint or Webhook (e.g. HubSpot, Zapier, Make, custom API)
-    const response = await fetch('https://api.quickreply.ai/webhook/company/6a26b91403ab54ca405aec99_c/key/ZdcfeGhqAZqAFgk89', {
+    // ── Call the Cloudflare Worker (NOT QuickReply directly) ──
+    // The Worker validates again server-side, adds ownerphone + source,
+    // and forwards to the real webhook. The browser never sees that URL.
+    const response = await fetch(PROXY_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
-        // If your CRM requires authorization headers (note: serverless backends are recommended to hide keys):
-        // 'Authorization': 'Bearer YOUR_CRM_API_KEY'
       },
-      body: JSON.stringify({
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        message: formData.message,
-        source: 'Gonzo Asian Landing Page'
-      })
+      body: JSON.stringify(formData)
     });
 
     if (response.ok) {
-      console.log('Lead successfully sent to CRM');
+      console.log('Lead successfully sent');
     } else {
-      console.warn('CRM API returned status:', response.status);
+      console.warn('Proxy returned status:', response.status);
     }
   } catch (error) {
     // We catch the error but still let the user proceed visually so they aren't blocked
-    console.error('Failed to submit lead to CRM:', error);
+    console.error('Failed to submit lead:', error);
   }
 
   // Visual success feedback
