@@ -58,7 +58,7 @@ document.getElementById('contact-form').addEventListener('submit', async (e) => 
   try {
     // ── CRM API / WEBHOOK CALL ──
     // Replace this placeholder URL with your actual CRM API endpoint or Webhook (e.g. HubSpot, Zapier, Make, custom API)
-    const response = await fetch('https://api.yourcrm.com/v1/leads', {
+    const response = await fetch('https://api.quickreply.ai/webhook/company/6a26b91403ab54ca405aec99_c/key/ZdcfeGhqAZqAFgk89', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
